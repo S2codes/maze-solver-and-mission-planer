@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>ESP32 WebSocket Test</title>
+    <script>
+        let ws;
+        function connect() {
+            // Connect to ESP32's IP address and WebSocket port
+            ws = new WebSocket('ws://' + document.getElementById('ip').value + ':81');
+            
+            ws.onopen = function() {
+                document.getElementById('status').innerHTML = 'Connected';
+            };
+            
+            ws.onmessage = function(evt) {
+                const received_msg = evt.data;
+                document.getElementById('messages').innerHTML += 'Received: ' + received_msg + '<br>';
+                
+                // Parse and pretty-print the JSON
+                try {
+                    const jsonObj = JSON.parse(received_msg);
+                    console.log(jsonObj);
+                } catch(e) {
+                    console.error('Invalid JSON:', e);
+                }
+            };
+            
+            ws.onclose = function() {
+                document.getElementById('status').innerHTML = 'Disconnected';
+            };
+        }
+        
+        function sendMessage(action) {
+            const msg = {
+                action: action
+            };
+            ws.send(JSON.stringify(msg));
+            document.getElementById('messages').innerHTML += 'Sent: ' + JSON.stringify(msg) + '<br>';
+        }
+    </script>
+</head>
+<body>
+    <h2>ESP32 WebSocket Test</h2>
+    <p>
+        ESP32 IP: <input type="text" id="ip" value="192.168.1.X">
+        <button onclick="connect()">Connect</button>
+        <span id="status">Disconnected</span>
+    </p>
+    <p>
+        <button onclick="sendMessage('led_on')">LED ON</button>
+        <button onclick="sendMessage('led_off')">LED OFF</button>
+        <button onclick="sendMessage('status')">Get Status</button>
+    </p>
+    <div id="messages" style="border:1px solid #ccc; padding:10px; height:300px; overflow:auto;"></div>
+</body>
+</html>

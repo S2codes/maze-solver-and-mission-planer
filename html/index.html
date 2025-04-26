@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Mission Planner</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      background: #f0f2f5;
+      text-align: center;
+      padding: 2rem;
+    }
+    h1 {
+      color: #2b2d42;
+    }
+    .btn-group button {
+      padding: 10px 20px;
+      margin: 10px;
+      font-size: 16px;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+    }
+    .btn-forward { background: #4caf50; color: white; }
+    .btn-back { background: #f44336; color: white; }
+    .btn-left { background: #2196F3; color: white; }
+    .btn-right { background: #FF9800; color: white; }
+    .btn-stop { background: #9E9E9E; color: white; }
+    .rotate-controls input {
+      width: 60px;
+    }
+    .sensor-box {
+      margin-top: 2rem;
+      background: white;
+      padding: 1rem;
+      border-radius: 10px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+    .sensor-box div {
+      margin: 8px 0;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>Mission Planner</h1>
+
+  <div class="btn-group">
+    <button class="btn-forward" onclick="sendCommand('forward')">Forward</button>
+    <button class="btn-back" onclick="sendCommand('backward')">Backward</button>
+    <button class="btn-left" onclick="sendCommand('left')">Left</button>
+    <button class="btn-right" onclick="sendCommand('right')">Right</button>
+    <button class="btn-stop" onclick="sendCommand('stop')">Stop</button>
+  </div>
+
+  <div class="rotate-controls">
+    <label>Rotate Left: <input id="leftAngle" type="number" value="30">°</label>
+    <button onclick="rotateLeft()">Go</button>
+    <br><br>
+    <label>Rotate Right: <input id="rightAngle" type="number" value="30">°</label>
+    <button onclick="rotateRight()">Go</button>
+  </div>
+
+  <div class="sensor-box" id="sensorData">
+    <div>Front Distance: -- cm</div>
+    <div>Left Distance: -- cm</div>
+    <div>Right Distance: -- cm</div>
+    <div>Left Encoder: --</div>
+    <div>Right Encoder: --</div>
+    <div>Left RPM: --</div>
+    <div>Right RPM: --</div>
+  </div>
+
+  <script>
+    let websocket;
+    
+    function initWebSocket() {
+      let dnsName = "192.168.4.1";
+      websocket = new WebSocket("ws://" + dnsName + ":81");
+      
+      websocket.onopen = function(event) {
+        console.log("Connection established");
+      };
+      
+      websocket.onclose = function(event) {
+        console.log("Connection closed");
+        // Try to reconnect after 2 seconds
+        setTimeout(initWebSocket, 2000);
+      };
+      
+      websocket.onmessage = function(event) {
+        try {
+          console.log("Received data:", event.data);
+          const data = JSON.parse(event.data);
+          
+          document.getElementById("sensorData").innerHTML = `
+            <div>Front Distance: ${data.frontDistance} cm</div>
+            <div>Left Distance: ${data.leftDistance} cm</div>
+            <div>Right Distance: ${data.rightDistance} cm</div>
+            <div>Left Encoder: ${data.leftEncoder}</div>
+            <div>Right Encoder: ${data.rightEncoder}</div>
+            <div>Left RPM: ${data.leftRPM}</div>
+            <div>Right RPM: ${data.rightRPM}</div>
+          `;
+        } catch (err) {
+          console.log("Message received:", event.data);
+        }
+      };
+    }
+    
+    // Initialize WebSocket connection when page loads
+    window.onload = function() {
+      initWebSocket();
+    };
+
+    function sendCommand(cmd) {
+      if (websocket.readyState === WebSocket.OPEN) {
+        const message = JSON.stringify({
+          command: cmd
+        });
+        websocket.send(message);
+        console.log("Sent:", message);
+      } else {
+        console.log("WebSocket not connected");
+      }
+    }
+
+    function rotateLeft() {
+      if (websocket.readyState === WebSocket.OPEN) {
+        const angle = parseInt(document.getElementById("leftAngle").value) || 30;
+        const message = JSON.stringify({
+          command: "turnLeft",
+          angle: angle
+        });
+        websocket.send(message);
+        console.log("Sent:", message);
+      } else {
+        console.log("WebSocket not connected");
+      }
+    }
+
+    function rotateRight() {
+      if (websocket.readyState === WebSocket.OPEN) {
+        const angle = parseInt(document.getElementById("rightAngle").value) || 30;
+        const message = JSON.stringify({
+          command: "turnRight",
+          angle: angle
+        });
+        websocket.send(message);
+        console.log("Sent:", message);
+      } else {
+        console.log("WebSocket not connected");
+      }
+    }
+  </script>
+</body>
+</html>

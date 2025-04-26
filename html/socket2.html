@@ -1,0 +1,361 @@
+    <!DOCTYPE html>
+    <html>
+
+    <head>
+        <title>Robot Odometry Controller</title>
+        <style>
+            body {
+                font-family: Arial, sans-serif;
+                margin: 20px;
+                background-color: #f5f5f5;
+            }
+
+            .dashboard {
+                display: grid;
+                grid-template-columns: repeat(3, 1fr);
+                gap: 20px;
+                max-width: 1200px;
+                margin: 0 auto;
+            }
+
+            .panel {
+                background-color: white;
+                border-radius: 8px;
+                padding: 15px;
+                box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+            }
+
+            h2 {
+                color: #333;
+                border-bottom: 1px solid #eee;
+                padding-bottom: 10px;
+                margin-top: 0;
+            }
+
+            .data-row {
+                display: flex;
+                justify-content: space-between;
+                margin: 8px 0;
+            }
+
+            .data-label {
+                font-weight: bold;
+            }
+
+            .data-value {
+                font-family: monospace;
+            }
+
+            .control-panel {
+                grid-column: span 3;
+                text-align: center;
+            }
+
+            button {
+                background-color: #4CAF50;
+                border: none;
+                color: white;
+                padding: 10px 20px;
+                text-align: center;
+                text-decoration: none;
+                display: inline-block;
+                font-size: 16px;
+                margin: 4px 2px;
+                cursor: pointer;
+                border-radius: 4px;
+            }
+
+            button.stop {
+                background-color: #f44336;
+            }
+
+            .raw-data {
+                grid-column: span 3;
+                background-color: #333;
+                color: #0f0;
+                padding: 15px;
+                border-radius: 8px;
+                font-family: monospace;
+                white-space: pre;
+                overflow-x: auto;
+                max-height: 200px;
+            }
+
+            .small-value {
+                font-size: 0.8em;
+                color: #666;
+            }
+        </style>
+    </head>
+
+    <body>
+        <h1>Robot Odometry Controller</h1>
+
+        <div class="dashboard">
+            <div class="panel">
+                <h2>Position Tracking</h2>
+                <div class="data-row">
+                    <span class="data-label">X Position:</span>
+                    <span class="data-value" id="posX">0.00</span> m
+                </div>
+                <div class="data-row">
+                    <span class="data-label">Y Position:</span>
+                    <span class="data-value" id="posY">0.00</span> m
+                </div>
+                <div class="data-row">
+                    <span class="data-label">Orientation:</span>
+                    <span class="data-value" id="orientation">0.00</span>°
+                </div>
+                <div class="data-row">
+                    <span class="data-label">Distance Traveled:</span>
+                    <span class="data-value" id="distance">0.00</span> m
+                </div>
+            </div>
+
+            <div class="panel">
+                <h2>Motion Data</h2>
+                <div class="data-row">
+                    <span class="data-label">Left RPM:</span>
+                    <span class="data-value" id="leftRPM">0</span>
+                </div>
+                <div class="data-row">
+                    <span class="data-label">Right RPM:</span>
+                    <span class="data-value" id="rightRPM">0</span>
+                </div>
+                <div class="data-row">
+                    <span class="data-label">Linear Velocity:</span>
+                    <span class="data-value" id="linearVel">0.00</span> m/s
+                </div>
+                <div class="data-row">
+                    <span class="data-label">Angular Velocity:</span>
+                    <span class="data-value" id="angularVel">0.00</span> rad/s
+                </div>
+            </div>
+
+            <div class="panel">
+                <h2>Sensor Readings</h2>
+                <div class="data-row">
+                    <span class="data-label">Front Distance:</span>
+                    <span class="data-value" id="frontDist">0</span> cm
+                </div>
+                <div class="data-row">
+                    <span class="data-label">Left Distance:</span>
+                    <span class="data-value" id="leftDist">0</span> cm
+                </div>
+                <div class="data-row">
+                    <span class="data-label">Right Distance:</span>
+                    <span class="data-value" id="rightDist">0</span> cm
+                </div>
+                <div class="data-row">
+                    <span class="data-label">Left Encoder:</span>
+                    <span class="data-value" id="leftEncoder">0</span> ticks
+                </div>
+                <div class="data-row">
+                    <span class="data-label">Right Encoder:</span>
+                    <span class="data-value" id="rightEncoder">0</span> ticks
+                </div>
+            </div>
+
+            <div class="control-panel">
+                <h2>Robot Controls</h2>
+                <button onclick="sendCommand('forward')">Forward</button>
+                <button onclick="sendCommand('backward')">Backward</button>
+                <button onclick="sendCommand('turnLeft')">Left</button>
+                <button onclick="sendCommand('turnRight')">Right</button>
+
+                <button onclick="sendCommand('startMaze')">startMaze</button>
+                <button onclick="sendCommand('stopMaze')">stopMaze</button>
+
+                <button class="stop" onclick="sendCommand('stop')">Stop</button>
+            </div>
+
+            <div class="raw-data">
+                <h2>Raw Data</h2>
+                <div id="rawData">Waiting for data...</div>
+            </div>
+
+
+            <div class="panel" style="grid-column: span 3;">
+                <h2>Real-Time Sensor & Encoder Data</h2>
+                <canvas id="sensorChart" height="150"></canvas>
+                <canvas id="encoderChart" height="150" style="margin-top:20px;"></canvas>
+            </div>
+
+
+
+        </div>
+
+        <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+        <script>
+            // WebSocket connection
+            let dnsName = "192.168.4.1";
+            const ws = new WebSocket('ws://' + dnsName + ':81/');
+
+            // Handle WebSocket messages
+            ws.onmessage = function (event) {
+                try {
+                    // First check if this is a connection message
+                    if (event.data === "Connected from server") {
+                        console.log('WebSocket connected');
+                        return;
+                    }
+
+                    // Parse JSON data
+                    const data = JSON.parse(event.data);
+                    // console.log('Received data:', data);
+                    console.log('isWallFind:', data.isWallFind);
+                    console.log('mazeStatus:', data.mazeStatus);
+
+                    // Update position data with proper null checks
+                    updateField('posX', data.posX, 8);
+                    updateField('posY', data.posY, 8);
+                    updateField('orientation', data.orientation, 2);
+                    updateField('distance', data.distanceTraveled, 4);
+
+                    // Update motion data
+                    updateField('leftRPM', data.leftRPM, 0);
+                    updateField('rightRPM', data.rightRPM, 0);
+                    updateField('linearVel', data.velocity?.linear, 2);
+                    updateField('angularVel', data.odometry?.angular, 2);
+
+                    // Update sensor data
+                    updateField('frontDist', data.frontDistance, 0);
+                    updateField('leftDist', data.leftDistance, 0);
+                    updateField('rightDist', data.rightDistance, 0);
+                    updateField('leftEncoder', data.leftEncoder, 0);
+                    updateField('rightEncoder', data.rightEncoder, 0);
+
+                    // Update raw data display
+                    document.getElementById('rawData').textContent = JSON.stringify(data, null, 2);
+
+
+                    // Update sensor chart
+                    updateChart(sensorChart, [
+                        data.frontDistance,
+                        data.leftDistance,
+                        data.rightDistance
+                    ]);
+
+                    // Update encoder chart
+                    updateChart(encoderChart, [
+                        data.leftEncoder,
+                        data.rightEncoder
+                    ]);
+
+
+
+                } catch (error) {
+                    console.error('Error processing message:', error);
+                    document.getElementById('rawData').textContent = 'Error: ' + error.message + '\n' + event.data;
+                }
+            };
+
+            // Helper function to safely update fields
+            function updateField(elementId, value, decimals) {
+                const element = document.getElementById(elementId);
+                if (element) {
+                    if (value === undefined || value === null) {
+                        element.textContent = 'N/A';
+                    } else if (decimals === 0) {
+                        element.textContent = Math.round(value);
+                    } else {
+                        element.textContent = value.toFixed(decimals);
+                    }
+
+                    // Add special handling for very small numbers
+                    if (Math.abs(value) < 0.0001 && value !== 0) {
+                        element.classList.add('small-value');
+                    } else {
+                        element.classList.remove('small-value');
+                    }
+                }
+            }
+
+            // Send commands to robot
+            function sendCommand(cmd) {
+                const command = {
+                    command: cmd
+                };
+                ws.send(JSON.stringify(command));
+                console.log('Sent command: ' + cmd);
+            }
+
+            // Handle WebSocket errors
+            ws.onerror = function (error) {
+                console.log('WebSocket error: ', error);
+                document.getElementById('rawData').textContent = 'WebSocket error: ' + error;
+            };
+
+            ws.onclose = function () {
+                console.log('WebSocket disconnected');
+                document.getElementById('rawData').textContent = 'WebSocket disconnected';
+            };
+        </script>
+
+
+        <script>
+            const sensorCtx = document.getElementById('sensorChart').getContext('2d');
+            const encoderCtx = document.getElementById('encoderChart').getContext('2d');
+
+            const MAX_DATA_POINTS = 50;
+
+            const sensorChart = new Chart(sensorCtx, {
+                type: 'line',
+                data: {
+                    labels: [],
+                    datasets: [
+                        { label: 'Front Distance', borderColor: 'red', data: [], fill: false },
+                        { label: 'Left Distance', borderColor: 'green', data: [], fill: false },
+                        { label: 'Right Distance', borderColor: 'blue', data: [], fill: false }
+                    ]
+                },
+                options: {
+                    animation: false,
+                    responsive: true,
+                    scales: {
+                        x: { display: false },
+                        y: { beginAtZero: true }
+                    }
+                }
+            });
+
+            const encoderChart = new Chart(encoderCtx, {
+                type: 'line',
+                data: {
+                    labels: [],
+                    datasets: [
+                        { label: 'Left Encoder', borderColor: 'orange', data: [], fill: false },
+                        { label: 'Right Encoder', borderColor: 'purple', data: [], fill: false }
+                    ]
+                },
+                options: {
+                    animation: false,
+                    responsive: true,
+                    scales: {
+                        x: { display: false },
+                        y: { beginAtZero: true }
+                    }
+                }
+            });
+
+            function updateChart(chart, values) {
+                const timestamp = new Date().toLocaleTimeString();
+                chart.data.labels.push(timestamp);
+
+                values.forEach((val, i) => chart.data.datasets[i].data.push(val));
+
+                if (chart.data.labels.length > MAX_DATA_POINTS) {
+                    chart.data.labels.shift();
+                    chart.data.datasets.forEach(dataset => dataset.data.shift());
+                }
+
+                chart.update('none');
+            }
+        </script>
+
+
+
+
+    </body>
+
+    </html>
